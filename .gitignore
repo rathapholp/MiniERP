@@ -24,3 +24,11 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Angular cache
+.angular/
+frontend/.angular/
+
+# Backend env
+backend/.env
+

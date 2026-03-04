@@ -1,0 +1,333 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+enum ContactType {
+  CUSTOMER
+  SUPPLIER
+  BOTH
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIAL
+  PAID
+  OVERDUE
+  CANCELLED
+  VOID
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  PROMPTPAY
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SENT
+  RECEIVED
+  CANCELLED
+}
+
+enum BillStatus {
+  DRAFT
+  RECEIVED
+  PARTIAL
+  PAID
+  CANCELLED
+}
+
+enum ExpenseStatus {
+  DRAFT
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUST
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(STAFF)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Contact {
+  id             Int           @id @default(autoincrement())
+  code           String        @unique
+  name           String
+  taxId          String?
+  type           ContactType
+  email          String?
+  phone          String?
+  address        String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  quotations     Quotation[]
+  invoices       Invoice[]
+  purchaseOrders PurchaseOrder[]
+  bills          Bill[]
+}
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+}
+
+model Product {
+  id                 Int                @id @default(autoincrement())
+  code               String             @unique
+  name               String
+  unit               String             @default("pcs")
+  costPrice          Decimal            @default(0) @db.Decimal(15, 2)
+  sellPrice          Decimal            @default(0) @db.Decimal(15, 2)
+  vatRate            Decimal            @default(7) @db.Decimal(5, 2)
+  stockQty           Decimal            @default(0) @db.Decimal(15, 3)
+  categoryId         Int?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  category           Category?          @relation(fields: [categoryId], references: [id])
+  stockMovements     StockMovement[]
+  quotationLines     QuotationLine[]
+  invoiceLines       InvoiceLine[]
+  purchaseOrderLines PurchaseOrderLine[]
+  billLines          BillLine[]
+}
+
+model StockMovement {
+  id         Int               @id @default(autoincrement())
+  productId  Int
+  type       StockMovementType
+  qty        Decimal           @db.Decimal(15, 3)
+  balanceQty Decimal           @db.Decimal(15, 3)
+  refType    String?
+  refId      Int?
+  note       String?
+  createdAt  DateTime          @default(now())
+  product    Product           @relation(fields: [productId], references: [id])
+}
+
+model DocumentSequence {
+  id      Int    @id @default(autoincrement())
+  prefix  String
+  year    Int
+  lastSeq Int    @default(0)
+
+  @@unique([prefix, year])
+}
+
+model Quotation {
+  id         Int             @id @default(autoincrement())
+  number     String          @unique
+  contactId  Int
+  date       DateTime
+  validUntil DateTime?
+  status     QuotationStatus @default(DRAFT)
+  subtotal   Decimal         @db.Decimal(15, 2)
+  vatAmount  Decimal         @db.Decimal(15, 2)
+  total      Decimal         @db.Decimal(15, 2)
+  note       String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  contact    Contact         @relation(fields: [contactId], references: [id])
+  lines      QuotationLine[]
+  invoices   Invoice[]
+}
+
+model QuotationLine {
+  id          Int       @id @default(autoincrement())
+  quotationId Int
+  productId   Int?
+  description String
+  qty         Decimal   @db.Decimal(15, 3)
+  unitPrice   Decimal   @db.Decimal(15, 2)
+  vatRate     Decimal   @default(7) @db.Decimal(5, 2)
+  vatAmount   Decimal   @db.Decimal(15, 2)
+  amount      Decimal   @db.Decimal(15, 2)
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  product     Product?  @relation(fields: [productId], references: [id])
+}
+
+model Invoice {
+  id          Int           @id @default(autoincrement())
+  number      String        @unique
+  contactId   Int
+  quotationId Int?
+  date        DateTime
+  dueDate     DateTime?
+  status      InvoiceStatus @default(DRAFT)
+  subtotal    Decimal       @db.Decimal(15, 2)
+  vatAmount   Decimal       @db.Decimal(15, 2)
+  total       Decimal       @db.Decimal(15, 2)
+  paidAmount  Decimal       @default(0) @db.Decimal(15, 2)
+  note        String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  contact     Contact       @relation(fields: [contactId], references: [id])
+  quotation   Quotation?    @relation(fields: [quotationId], references: [id])
+  lines       InvoiceLine[]
+  receipts    Receipt[]
+}
+
+model InvoiceLine {
+  id          Int      @id @default(autoincrement())
+  invoiceId   Int
+  productId   Int?
+  description String
+  qty         Decimal  @db.Decimal(15, 3)
+  unitPrice   Decimal  @db.Decimal(15, 2)
+  vatRate     Decimal  @default(7) @db.Decimal(5, 2)
+  vatAmount   Decimal  @db.Decimal(15, 2)
+  amount      Decimal  @db.Decimal(15, 2)
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product     Product? @relation(fields: [productId], references: [id])
+}
+
+model Receipt {
+  id            Int           @id @default(autoincrement())
+  number        String        @unique
+  invoiceId     Int
+  date          DateTime
+  amount        Decimal       @db.Decimal(15, 2)
+  paymentMethod PaymentMethod @default(CASH)
+  reference     String?
+  note          String?
+  createdAt     DateTime      @default(now())
+  invoice       Invoice       @relation(fields: [invoiceId], references: [id])
+}
+
+model PurchaseOrder {
+  id           Int                 @id @default(autoincrement())
+  number       String              @unique
+  contactId    Int
+  date         DateTime
+  expectedDate DateTime?
+  status       PurchaseOrderStatus @default(DRAFT)
+  subtotal     Decimal             @db.Decimal(15, 2)
+  vatAmount    Decimal             @db.Decimal(15, 2)
+  total        Decimal             @db.Decimal(15, 2)
+  note         String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  contact      Contact             @relation(fields: [contactId], references: [id])
+  lines        PurchaseOrderLine[]
+  bills        Bill[]
+}
+
+model PurchaseOrderLine {
+  id              Int           @id @default(autoincrement())
+  purchaseOrderId Int
+  productId       Int?
+  description     String
+  qty             Decimal       @db.Decimal(15, 3)
+  unitPrice       Decimal       @db.Decimal(15, 2)
+  vatRate         Decimal       @default(7) @db.Decimal(5, 2)
+  vatAmount       Decimal       @db.Decimal(15, 2)
+  amount          Decimal       @db.Decimal(15, 2)
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product         Product?      @relation(fields: [productId], references: [id])
+}
+
+model Bill {
+  id              Int           @id @default(autoincrement())
+  number          String        @unique
+  contactId       Int
+  purchaseOrderId Int?
+  date            DateTime
+  dueDate         DateTime?
+  status          BillStatus    @default(DRAFT)
+  subtotal        Decimal       @db.Decimal(15, 2)
+  vatAmount       Decimal       @db.Decimal(15, 2)
+  total           Decimal       @db.Decimal(15, 2)
+  paidAmount      Decimal       @default(0) @db.Decimal(15, 2)
+  note            String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  contact         Contact       @relation(fields: [contactId], references: [id])
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  lines           BillLine[]
+  payments        BillPayment[]
+}
+
+model BillLine {
+  id          Int      @id @default(autoincrement())
+  billId      Int
+  productId   Int?
+  description String
+  qty         Decimal  @db.Decimal(15, 3)
+  unitPrice   Decimal  @db.Decimal(15, 2)
+  vatRate     Decimal  @default(7) @db.Decimal(5, 2)
+  vatAmount   Decimal  @db.Decimal(15, 2)
+  amount      Decimal  @db.Decimal(15, 2)
+  bill        Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+  product     Product? @relation(fields: [productId], references: [id])
+}
+
+model BillPayment {
+  id            Int           @id @default(autoincrement())
+  billId        Int
+  date          DateTime
+  amount        Decimal       @db.Decimal(15, 2)
+  paymentMethod PaymentMethod @default(CASH)
+  reference     String?
+  note          String?
+  createdAt     DateTime      @default(now())
+  bill          Bill          @relation(fields: [billId], references: [id])
+}
+
+model ExpenseCategory {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  createdAt DateTime  @default(now())
+  expenses  Expense[]
+}
+
+model Expense {
+  id            Int              @id @default(autoincrement())
+  number        String           @unique
+  categoryId    Int?
+  date          DateTime
+  description   String
+  amount        Decimal          @db.Decimal(15, 2)
+  vatAmount     Decimal          @default(0) @db.Decimal(15, 2)
+  total         Decimal          @db.Decimal(15, 2)
+  status        ExpenseStatus    @default(DRAFT)
+  paymentMethod PaymentMethod?
+  reference     String?
+  note          String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  category      ExpenseCategory? @relation(fields: [categoryId], references: [id])
+}
